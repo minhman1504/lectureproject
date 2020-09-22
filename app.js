@@ -1,41 +1,106 @@
-var createError = require('http-errors');
 var express = require('express');
+var bodyParser = require('body-parser');
+var exphbs = require('express-handlebars');
+var express_handlebars_sections = require('express-handlebars-sections');
+var wnumb = require('wnumb');
+var helpers = require('handlebars-helpers');
+var array = helpers.array();
+var formidable = require('express-formidable');
 var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+var ss=require('handlebars-dateformat');
+var Handlebars = require('handlebars');
+var HandlebarsIntl = require('handlebars-intl');
+var fs = require('fs');
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+Handlebars.registerHelper('dateFormat', require('handlebars-dateformat'));
+
+
+var handleLayoutMDW = require('./middle-wares/handleLayout'),
+    handle404MDW = require('./middle-wares/handle404'),
+    restrict = require('./middle-wares/restrict');
+
+var SPController = require('./Controllers/SPController');
+var HomeController = require('./Controllers/HomeController');
+var ProductController = require('./Controllers/ProductController');
+var accountController = require('./Controllers/accountController');
+var categoryController = require('./Controllers/categoryController');
+var cartController = require('./Controllers/cartController');
+var managerController=require('./Controllers/managerController');
+var SearchController = require('./Controllers/SearchController');
+
 
 var app = express();
+var session = require('express-session');
+var MySQLStore = require('express-mysql-session')(session);
 
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
-
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+//session
+var sessionStore = new MySQLStore({
+    host: 'lecturedb.mysql.database.azure.com',
+    port: 3306,
+    user: 'myadmin@lecturedb',
+    password: 'Mank15041504',
+    database: 'minhman1504',
+    ssl:{ca:fs.readFileSync('./BaltimoreCyberTrustRoot.crt.pem')},
+    createDatabaseTable: true,
+    schema: {
+        tableName: 'sessions',
+        columnNames: {
+            session_id: 'session_id',
+            expires: 'expires',
+            data: 'data'
+        }
+    }
 });
+app.use(session({
+    key: 'session_cookie_name',
+    secret: 'session_cookie_secret',
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false
+}));
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
-});
 
-module.exports = app;
+
+
+app.engine('hbs', exphbs({
+    defaultLayout: 'main',
+    extname: 'hbs',
+    layoutsDir: 'views/_layouts',
+    helpers: {
+        section: express_handlebars_sections(),
+        number_format: n => {
+            var nf = wnumb({
+                thousand: '.'
+            });
+            return nf.to(n);
+        }
+    }
+}));
+
+
+
+app.set('view engine', 'hbs');
+app.set('views', path.join(__dirname, "views"));
+app.use(express.static(path.resolve(__dirname, 'public')));
+
+// app.use(formidable());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({
+    extended: false
+}));
+
+app.use(handleLayoutMDW);
+
+app.use('/', HomeController);
+app.use('/sample_product', ProductController);
+app.use('/SP', SPController);
+app.use('/manager',managerController);
+app.use('/account', accountController);
+app.use('/cart', cartController);
+app.use('/tim-kiem', categoryController);
+app.use('/tim-voi-key', SearchController);
+
+app.use(handle404MDW);
+
+app.listen(3000);
